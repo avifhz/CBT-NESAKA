@@ -1,0 +1,504 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Hardened Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'kipaskoplak@gmail.com';
+    }
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+    function isProctor() {
+      return isVerifiedUser() &&
+        exists(/databases/$(database)/documents/proctor_sessions/$(request.auth.uid));
+    }
+    function isStudentForNis(nis) {
+      return isVerifiedUser() &&
+        exists(/databases/$(database)/documents/student_sessions/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/student_sessions/$(request.auth.uid)).data.nis == nis;
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'name', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAppConfigPublic(data) {
+      return data.keys().hasAll(['nama_sekolah', 'nama_ujian', 'durasi', 'status_ujian', 'tokenHash', 'tokenRequired', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'nama_instansi', 'kementerian_header', 'nama_sekolah', 'logo_sekolah', 'logo_kementerian',
+          'nama_ujian', 'durasi', 'status_ujian', 'acak_soal', 'ujian_ketat', 'kiosk_mode',
+          'exambro_only', 'device_lock', 'kalkulator', 'coretan', 'adaptif_cat',
+          'ai_face_liveness', 'ai_gaze', 'audio_monitoring', 'audio_limit',
+          'tokenHash', 'tokenRequired', 'updatedAt'
+        ]) &&
+        data.nama_sekolah is string && data.nama_sekolah.size() <= 200 &&
+        data.nama_ujian is string && data.nama_ujian.size() <= 160 &&
+        data.durasi is string && data.durasi.size() <= 16 &&
+        data.status_ujian in ['Aktif', 'Nonaktif', 'Selesai'] &&
+        data.tokenHash is string && data.tokenHash.size() <= 128 &&
+        data.tokenRequired is bool &&
+        data.updatedAt is timestamp &&
+        (!('nama_instansi' in data) || (data.nama_instansi is string && data.nama_instansi.size() <= 200)) &&
+        (!('kementerian_header' in data) || (data.kementerian_header is string && data.kementerian_header.size() <= 250)) &&
+        (!('logo_sekolah' in data) || (data.logo_sekolah is string && data.logo_sekolah.size() <= 120000)) &&
+        (!('logo_kementerian' in data) || (data.logo_kementerian is string && data.logo_kementerian.size() <= 120000)) &&
+        (!('acak_soal' in data) || data.acak_soal in ['Ya', 'Tidak']) &&
+        (!('ujian_ketat' in data) || data.ujian_ketat in ['Ya', 'Tidak']) &&
+        (!('kiosk_mode' in data) || data.kiosk_mode in ['Ya', 'Tidak']) &&
+        (!('exambro_only' in data) || data.exambro_only in ['Ya', 'Tidak']) &&
+        (!('device_lock' in data) || data.device_lock in ['Ya', 'Tidak']) &&
+        (!('kalkulator' in data) || data.kalkulator in ['Ya', 'Tidak']) &&
+        (!('coretan' in data) || data.coretan in ['Ya', 'Tidak']) &&
+        (!('adaptif_cat' in data) || data.adaptif_cat in ['Ya', 'Tidak']) &&
+        (!('ai_face_liveness' in data) || data.ai_face_liveness in ['Ya', 'Tidak']) &&
+        (!('ai_gaze' in data) || data.ai_gaze in ['Ya', 'Tidak']) &&
+        (!('audio_monitoring' in data) || data.audio_monitoring in ['Ya', 'Tidak']) &&
+        (!('audio_limit' in data) || (data.audio_limit is string && data.audio_limit.size() <= 32));
+    }
+
+    function isValidAppSecrets(data) {
+      return data.keys().hasAll(['token', 'updatedAt']) &&
+        data.keys().hasOnly(['token', 'notif_email', 'email_wali', 'kepsek_nama', 'kepsek_nip', 'updatedAt']) &&
+        data.token is string && data.token.size() <= 32 &&
+        data.updatedAt is timestamp &&
+        (!('notif_email' in data) || data.notif_email in ['Ya', 'Tidak']) &&
+        (!('email_wali' in data) || (data.email_wali is string && data.email_wali.size() <= 200)) &&
+        (!('kepsek_nama' in data) || (data.kepsek_nama is string && data.kepsek_nama.size() <= 150)) &&
+        (!('kepsek_nip' in data) || (data.kepsek_nip is string && data.kepsek_nip.size() <= 64));
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['nis', 'nama', 'kelas', 'sesi', 'passHash', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['nis', 'nama', 'kelas', 'sesi', 'ruang', 'passHash', 'status', 'activeDeviceId', 'boundOwnerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.nis) &&
+        data.nama is string && data.nama.size() >= 1 && data.nama.size() <= 160 &&
+        data.kelas is string && data.kelas.size() <= 64 &&
+        data.sesi is string && data.sesi.size() <= 32 &&
+        data.passHash is string && data.passHash.size() == 64 && data.passHash.matches('^[a-f0-9]{64}$') &&
+        data.status in ['Offline', 'Sedang Ujian', 'Selesai'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        (!('ruang' in data) || (data.ruang is string && data.ruang.size() <= 64)) &&
+        (!('activeDeviceId' in data) || (data.activeDeviceId is string && data.activeDeviceId.size() <= 128)) &&
+        (!('boundOwnerUid' in data) || (data.boundOwnerUid is string && data.boundOwnerUid.size() <= 128));
+    }
+
+    function isValidStudentCredential(data) {
+      return data.keys().hasAll(['nis', 'password', 'updatedAt']) &&
+        data.keys().hasOnly(['nis', 'password', 'updatedAt']) &&
+        isValidId(data.nis) &&
+        data.password is string && data.password.size() <= 128 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidStudentSession(data) {
+      return data.keys().hasAll(['uid', 'nis', 'passHash', 'deviceId', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'nis', 'passHash', 'deviceId', 'deviceDesc', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == request.auth.uid &&
+        isValidId(data.nis) &&
+        data.passHash is string && data.passHash.size() == 64 && data.passHash.matches('^[a-f0-9]{64}$') &&
+        data.deviceId is string && data.deviceId.size() >= 1 && data.deviceId.size() <= 128 &&
+        (!('deviceDesc' in data) || (data.deviceDesc is string && data.deviceDesc.size() <= 200)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProctor(data) {
+      return data.keys().hasAll(['username', 'nama', 'passHash', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['username', 'nama', 'passHash', 'createdAt', 'updatedAt']) &&
+        isValidId(data.username) &&
+        data.nama is string && data.nama.size() >= 1 && data.nama.size() <= 160 &&
+        data.passHash is string && data.passHash.size() == 64 && data.passHash.matches('^[a-f0-9]{64}$') &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProctorCredential(data) {
+      return data.keys().hasAll(['username', 'password', 'updatedAt']) &&
+        data.keys().hasOnly(['username', 'password', 'updatedAt']) &&
+        isValidId(data.username) &&
+        data.password is string && data.password.size() <= 128 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProctorSession(data) {
+      return data.keys().hasAll(['uid', 'proctorUsername', 'passHash', 'nama', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'proctorUsername', 'passHash', 'nama', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == request.auth.uid &&
+        isValidId(data.proctorUsername) &&
+        data.passHash is string && data.passHash.size() == 64 && data.passHash.matches('^[a-f0-9]{64}$') &&
+        data.nama is string && data.nama.size() >= 1 && data.nama.size() <= 160 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidQuestion(data) {
+      return data.keys().hasAll(['id', 'mapel', 'kelas', 'no', 'soal', 'tipe_soal', 'isPublished', 'sortOrder', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'mapel', 'kelas', 'no', 'soal', 'a', 'b', 'c', 'd', 'e', 'kunci', 'tipe_soal', 'kesulitan', 'data_akm', 'isPublished', 'sortOrder', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.mapel is string && data.mapel.size() <= 120 &&
+        data.kelas is string && data.kelas.size() <= 80 &&
+        data.no is string && data.no.size() <= 16 &&
+        data.soal is string && data.soal.size() <= 20000 &&
+        data.tipe_soal is string && data.tipe_soal.size() <= 40 &&
+        data.isPublished is bool &&
+        data.sortOrder is number &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        (!('a' in data) || (data.a is string && data.a.size() <= 5000)) &&
+        (!('b' in data) || (data.b is string && data.b.size() <= 5000)) &&
+        (!('c' in data) || (data.c is string && data.c.size() <= 5000)) &&
+        (!('d' in data) || (data.d is string && data.d.size() <= 5000)) &&
+        (!('e' in data) || (data.e is string && data.e.size() <= 5000)) &&
+        (!('kunci' in data) || (data.kunci is string && data.kunci.size() <= 500)) &&
+        (!('kesulitan' in data) || (data.kesulitan is string && data.kesulitan.size() <= 32)) &&
+        (!('data_akm' in data) || (data.data_akm is string && data.data_akm.size() <= 20000));
+    }
+
+    function isValidSchedule(data) {
+      return data.keys().hasAll(['id', 'mapel', 'kelas', 'sesi', 'status', 'isPublished', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'tanggal', 'mapel', 'kelas', 'ruang', 'sesi', 'jam_mulai', 'jam_selesai', 'token', 'status', 'proktor', 'pengawas', 'banyak_soal', 'jenis_ujian', 'isPublished', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.mapel is string && data.mapel.size() <= 120 &&
+        data.kelas is string && data.kelas.size() <= 80 &&
+        data.sesi is string && data.sesi.size() <= 32 &&
+        data.status is string && data.status.size() <= 32 &&
+        data.isPublished is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        (!('tanggal' in data) || (data.tanggal is string && data.tanggal.size() <= 40)) &&
+        (!('ruang' in data) || (data.ruang is string && data.ruang.size() <= 64)) &&
+        (!('jam_mulai' in data) || (data.jam_mulai is string && data.jam_mulai.size() <= 24)) &&
+        (!('jam_selesai' in data) || (data.jam_selesai is string && data.jam_selesai.size() <= 24)) &&
+        (!('token' in data) || (data.token is string && data.token.size() <= 32)) &&
+        (!('proktor' in data) || (data.proktor is string && data.proktor.size() <= 120)) &&
+        (!('pengawas' in data) || (data.pengawas is string && data.pengawas.size() <= 120)) &&
+        (!('banyak_soal' in data) || (data.banyak_soal is string && data.banyak_soal.size() <= 16)) &&
+        (!('jenis_ujian' in data) || (data.jenis_ujian is string && data.jenis_ujian.size() <= 64));
+    }
+
+    function isValidGoogleFormLink(data) {
+      return data.keys().hasAll(['id', 'mapel', 'kelas', 'formUrl', 'status', 'isPublished', 'sections', 'items', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'mapel', 'kelas', 'formUrl', 'formId', 'formResponseUrl', 'status', 'judulForm', 'formDescription', 'submitMode', 'sections', 'items', 'isPublished', 'timestampText', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.mapel is string && data.mapel.size() <= 120 &&
+        data.kelas is string && data.kelas.size() <= 80 &&
+        data.formUrl is string && data.formUrl.size() <= 1000 &&
+        data.status in ['Aktif', 'Nonaktif'] &&
+        data.isPublished is bool &&
+        data.sections is list && data.sections.size() <= 50 &&
+        (data.sections.size() == 0 || data.sections[0] is map) &&
+        data.items is list && data.items.size() <= 200 &&
+        (data.items.size() == 0 || data.items[0] is map) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        (!('formId' in data) || (data.formId is string && data.formId.size() <= 256)) &&
+        (!('formResponseUrl' in data) || (data.formResponseUrl is string && data.formResponseUrl.size() <= 1000)) &&
+        (!('judulForm' in data) || (data.judulForm is string && data.judulForm.size() <= 300)) &&
+        (!('formDescription' in data) || (data.formDescription is string && data.formDescription.size() <= 5000)) &&
+        (!('submitMode' in data) || (data.submitMode is string && data.submitMode.size() <= 32)) &&
+        (!('timestampText' in data) || (data.timestampText is string && data.timestampText.size() <= 64));
+    }
+
+    function isValidExamSession(data) {
+      return data.keys().hasAll(['nis', 'nama', 'kelas', 'ownerUid', 'status', 'answers', 'timeLeft', 'totalSoal', 'answeredCount', 'score', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['nis', 'nama', 'kelas', 'mapel', 'ruang', 'ownerUid', 'deviceId', 'status', 'forceStopped', 'answers', 'timeLeft', 'totalSoal', 'answeredCount', 'score', 'tokenUsed', 'hashSig', 'detailAnalisa', 'submittedAtText', 'createdAt', 'updatedAt']) &&
+        isValidId(data.nis) &&
+        data.nama is string && data.nama.size() <= 160 &&
+        data.kelas is string && data.kelas.size() <= 64 &&
+        isValidId(data.ownerUid) &&
+        data.status in ['Sedang Ujian', 'Selesai', 'Selesai (OMR Kertas)', 'Offline'] &&
+        data.answers is map &&
+        data.timeLeft is number && data.timeLeft >= 0 && data.timeLeft <= 86400 &&
+        data.totalSoal is number && data.totalSoal >= 0 && data.totalSoal <= 500 &&
+        data.answeredCount is number && data.answeredCount >= 0 && data.answeredCount <= 500 &&
+        data.score is number && data.score >= 0 && data.score <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        (!('mapel' in data) || (data.mapel is string && data.mapel.size() <= 120)) &&
+        (!('ruang' in data) || (data.ruang is string && data.ruang.size() <= 64)) &&
+        (!('deviceId' in data) || (data.deviceId is string && data.deviceId.size() <= 128)) &&
+        (!('forceStopped' in data) || data.forceStopped is bool) &&
+        (!('tokenUsed' in data) || (data.tokenUsed is string && data.tokenUsed.size() <= 64)) &&
+        (!('hashSig' in data) || (data.hashSig is string && data.hashSig.size() <= 128)) &&
+        (!('detailAnalisa' in data) || (data.detailAnalisa is list && data.detailAnalisa.size() <= 200 && (data.detailAnalisa.size() == 0 || data.detailAnalisa[0] is map))) &&
+        (!('submittedAtText' in data) || (data.submittedAtText is string && data.submittedAtText.size() <= 64));
+    }
+
+    function isValidViolationLog(data) {
+      return data.keys().hasAll(['id', 'nis', 'nama', 'aktivitas', 'detail', 'ownerUid', 'timestampText', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'nis', 'nama', 'aktivitas', 'detail', 'ownerUid', 'timestampText', 'createdAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.nis) &&
+        data.nama is string && data.nama.size() <= 160 &&
+        data.aktivitas is string && data.aktivitas.size() <= 120 &&
+        data.detail is string && data.detail.size() <= 500 &&
+        isValidId(data.ownerUid) &&
+        data.timestampText is string && data.timestampText.size() <= 64 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidStudentPhoto(data) {
+      return data.keys().hasAll(['nis', 'nama', 'fotoBase64', 'ownerUid', 'timestampText', 'updatedAt']) &&
+        data.keys().hasOnly(['nis', 'nama', 'fotoBase64', 'tokenSesi', 'ownerUid', 'timestampText', 'updatedAt']) &&
+        isValidId(data.nis) &&
+        data.nama is string && data.nama.size() <= 160 &&
+        data.fotoBase64 is string && data.fotoBase64.size() <= 350000 &&
+        isValidId(data.ownerUid) &&
+        data.timestampText is string && data.timestampText.size() <= 64 &&
+        data.updatedAt is timestamp &&
+        (!('tokenSesi' in data) || (data.tokenSesi is string && data.tokenSesi.size() <= 64));
+    }
+
+    function isValidExamArchive(data) {
+      return data.keys().hasAll(['id', 'namaArsip', 'totalHasil', 'rataRata', 'hasilList', 'analisaList', 'createdBy', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'namaArsip', 'totalHasil', 'rataRata', 'hasilList', 'analisaList', 'createdBy', 'createdAt']) &&
+        isValidId(data.id) &&
+        data.namaArsip is string && data.namaArsip.size() >= 1 && data.namaArsip.size() <= 120 &&
+        data.totalHasil is number &&
+        data.rataRata is number &&
+        data.hasilList is list && data.hasilList.size() <= 500 &&
+        (data.hasilList.size() == 0 || data.hasilList[0] is map) &&
+        data.analisaList is list && data.analisaList.size() <= 500 &&
+        (data.analisaList.size() == 0 || data.analisaList[0] is map) &&
+        isValidId(data.createdBy) &&
+        data.createdAt is timestamp;
+    }
+
+    // 4. Collection Rules
+    match /test/connection {
+      allow get: if true;
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && (isAdmin() || (isVerifiedUser() && adminUid == request.auth.uid));
+      allow list: if isAdmin();
+      allow create: if isValidId(adminUid) && isAdmin() && isValidAdminUser(incoming()) && incoming().createdAt == request.time;
+      allow update: if isValidId(adminUid) && isAdmin() && isValidAdminUser(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(adminUid) && isAdmin();
+    }
+
+    match /app_config/{docId} {
+      allow get: if isValidId(docId) && docId == 'public';
+      allow create: if isValidId(docId) && docId == 'public' && isAdmin() && isValidAppConfigPublic(incoming()) && incoming().updatedAt == request.time;
+      allow update: if isValidId(docId) && docId == 'public' && isValidAppConfigPublic(incoming()) && incoming().updatedAt == request.time && (
+        isAdmin() ||
+        (isProctor() && incoming().diff(existing()).affectedKeys().hasOnly(['tokenHash', 'tokenRequired', 'updatedAt']))
+      );
+    }
+
+    match /app_secrets/{docId} {
+      allow get: if isValidId(docId) && docId == 'private' && (isAdmin() || isProctor());
+      allow create: if isValidId(docId) && docId == 'private' && isAdmin() && isValidAppSecrets(incoming()) && incoming().updatedAt == request.time;
+      allow update: if isValidId(docId) && docId == 'private' && isValidAppSecrets(incoming()) && incoming().updatedAt == request.time && (
+        isAdmin() ||
+        (isProctor() && incoming().diff(existing()).affectedKeys().hasOnly(['token', 'updatedAt']))
+      );
+    }
+
+    match /students/{nis} {
+      allow get: if isValidId(nis) && (isAdmin() || isProctor() || isStudentForNis(nis));
+      allow list: if isAdmin() || isProctor();
+      allow create: if isValidId(nis) && isAdmin() && isValidStudent(incoming()) && incoming().nis == nis && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(nis) && isValidStudent(incoming()) &&
+        incoming().nis == existing().nis &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (isProctor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeDeviceId', 'boundOwnerUid', 'ruang', 'updatedAt'])) ||
+          (isStudentForNis(nis) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activeDeviceId', 'boundOwnerUid', 'ruang', 'updatedAt']) && existing().status != 'Selesai')
+        );
+      allow delete: if isValidId(nis) && isAdmin();
+    }
+
+    match /student_credentials/{nis} {
+      allow get: if isValidId(nis) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(nis) && isAdmin() && isValidStudentCredential(incoming()) && incoming().nis == nis && incoming().updatedAt == request.time;
+      allow update: if isValidId(nis) && isAdmin() && isValidStudentCredential(incoming()) && incoming().nis == existing().nis && incoming().updatedAt == request.time;
+      allow delete: if isValidId(nis) && isAdmin();
+    }
+
+    match /student_sessions/{uid} {
+      allow get: if isValidId(uid) && (isAdmin() || isProctor() || (isVerifiedUser() && uid == request.auth.uid));
+      allow list: if isAdmin() || isProctor() || (isVerifiedUser() && resource.data.uid == request.auth.uid);
+      allow create: if isValidId(uid) && isVerifiedUser() && uid == request.auth.uid &&
+        isValidStudentSession(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/students/$(incoming().nis)) &&
+        get(/databases/$(database)/documents/students/$(incoming().nis)).data.passHash == incoming().passHash;
+      allow update: if isValidId(uid) && isVerifiedUser() && uid == request.auth.uid &&
+        isValidStudentSession(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/students/$(incoming().nis)) &&
+        get(/databases/$(database)/documents/students/$(incoming().nis)).data.passHash == incoming().passHash &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['nis', 'passHash', 'deviceId', 'deviceDesc', 'updatedAt']);
+      allow delete: if isValidId(uid) && (isAdmin() || isProctor() || (isVerifiedUser() && uid == request.auth.uid));
+    }
+
+    match /proctors/{proctorId} {
+      allow get: if isValidId(proctorId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(proctorId) && isAdmin() && isValidProctor(incoming()) && incoming().username == proctorId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(proctorId) && isAdmin() && isValidProctor(incoming()) && incoming().username == existing().username && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(proctorId) && isAdmin();
+    }
+
+    match /proctor_credentials/{proctorId} {
+      allow get: if isValidId(proctorId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(proctorId) && isAdmin() && isValidProctorCredential(incoming()) && incoming().username == proctorId && incoming().updatedAt == request.time;
+      allow update: if isValidId(proctorId) && isAdmin() && isValidProctorCredential(incoming()) && incoming().username == existing().username && incoming().updatedAt == request.time;
+      allow delete: if isValidId(proctorId) && isAdmin();
+    }
+
+    match /proctor_sessions/{uid} {
+      allow get: if isValidId(uid) && (isAdmin() || (isVerifiedUser() && uid == request.auth.uid));
+      allow list: if isAdmin() || (isVerifiedUser() && resource.data.uid == request.auth.uid);
+      allow create: if isValidId(uid) && isVerifiedUser() && uid == request.auth.uid &&
+        isValidProctorSession(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/proctors/$(incoming().proctorUsername)) &&
+        get(/databases/$(database)/documents/proctors/$(incoming().proctorUsername)).data.passHash == incoming().passHash;
+      allow update: if isValidId(uid) && isVerifiedUser() && uid == request.auth.uid &&
+        isValidProctorSession(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/proctors/$(incoming().proctorUsername)) &&
+        get(/databases/$(database)/documents/proctors/$(incoming().proctorUsername)).data.passHash == incoming().passHash &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['proctorUsername', 'passHash', 'nama', 'updatedAt']);
+      allow delete: if isValidId(uid) && (isAdmin() || (isVerifiedUser() && uid == request.auth.uid));
+    }
+
+    match /questions/{questionId} {
+      allow get: if isValidId(questionId) && (isAdmin() || isProctor() || (isVerifiedUser() && existing().isPublished == true));
+      allow list: if isAdmin() || isProctor() || (isVerifiedUser() && resource.data.isPublished == true);
+      allow create: if isValidId(questionId) && isAdmin() && isValidQuestion(incoming()) && incoming().id == questionId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(questionId) && isAdmin() && isValidQuestion(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(questionId) && isAdmin();
+    }
+
+    match /schedules/{scheduleId} {
+      allow get: if isValidId(scheduleId) && (isAdmin() || isProctor() || (isVerifiedUser() && existing().isPublished == true));
+      allow list: if isAdmin() || isProctor() || (isVerifiedUser() && resource.data.isPublished == true);
+      allow create: if isValidId(scheduleId) && isAdmin() && isValidSchedule(incoming()) && incoming().id == scheduleId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(scheduleId) && isAdmin() && isValidSchedule(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(scheduleId) && isAdmin();
+    }
+
+    match /gform_links/{linkId} {
+      allow get: if isValidId(linkId) && (isAdmin() || isProctor() || (isVerifiedUser() && existing().isPublished == true));
+      allow list: if isAdmin() || isProctor() || (isVerifiedUser() && resource.data.isPublished == true);
+      allow create: if isValidId(linkId) && isAdmin() && isValidGoogleFormLink(incoming()) && incoming().id == linkId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(linkId) && isAdmin() && isValidGoogleFormLink(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(linkId) && isAdmin();
+    }
+
+    match /exam_sessions/{nis} {
+      allow get: if isValidId(nis) && (isAdmin() || isProctor() || isStudentForNis(nis));
+      allow list: if isAdmin() || isProctor() || (isVerifiedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(nis) && isValidExamSession(incoming()) &&
+        incoming().nis == nis &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          isProctor() ||
+          (isStudentForNis(nis) && incoming().ownerUid == request.auth.uid)
+        );
+      allow update: if isValidId(nis) && isValidExamSession(incoming()) &&
+        incoming().nis == existing().nis &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (isProctor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'forceStopped', 'ruang', 'score', 'tokenUsed', 'submittedAtText', 'updatedAt'])) ||
+          (
+            isStudentForNis(nis) &&
+            incoming().ownerUid == request.auth.uid &&
+            existing().status != 'Selesai' &&
+            existing().status != 'Selesai (OMR Kertas)' &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'ownerUid', 'deviceId', 'mapel', 'ruang', 'status', 'answers',
+              'timeLeft', 'totalSoal', 'answeredCount', 'score', 'tokenUsed',
+              'hashSig', 'detailAnalisa', 'submittedAtText', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(nis) && isAdmin();
+    }
+
+    match /violations/{violationId} {
+      allow get: if isValidId(violationId) && (isAdmin() || isProctor() || (isVerifiedUser() && existing().ownerUid == request.auth.uid));
+      allow list: if isAdmin() || isProctor() || (isVerifiedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(violationId) && isValidViolationLog(incoming()) &&
+        incoming().id == violationId &&
+        incoming().createdAt == request.time && (
+          isAdmin() ||
+          isProctor() ||
+          (isStudentForNis(incoming().nis) && incoming().ownerUid == request.auth.uid)
+        );
+      allow update, delete: if isValidId(violationId) && isAdmin();
+    }
+
+    match /photos/{nis} {
+      allow get: if isValidId(nis) && (isAdmin() || isProctor() || isStudentForNis(nis));
+      allow list: if isAdmin() || isProctor() || (isVerifiedUser() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isValidId(nis) && isValidStudentPhoto(incoming()) &&
+        incoming().nis == nis &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (isStudentForNis(nis) && incoming().ownerUid == request.auth.uid)
+        );
+      allow update: if isValidId(nis) && isValidStudentPhoto(incoming()) &&
+        incoming().nis == existing().nis &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (isStudentForNis(nis) && incoming().ownerUid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['fotoBase64', 'tokenSesi', 'ownerUid', 'timestampText', 'updatedAt']))
+        );
+      allow delete: if isValidId(nis) && isAdmin();
+    }
+
+    match /archives/{archiveId} {
+      allow get: if isValidId(archiveId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(archiveId) && isAdmin() && isValidExamArchive(incoming()) && incoming().id == archiveId && incoming().createdBy == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if isValidId(archiveId) && isAdmin() && isValidExamArchive(incoming()) && incoming().id == existing().id && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(archiveId) && isAdmin();
+    }
+  }
+}

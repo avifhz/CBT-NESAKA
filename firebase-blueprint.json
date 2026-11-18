@@ -1,0 +1,360 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Registered administrator UID allowed full management access.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "name": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "createdAt"]
+    },
+    "AppConfigPublic": {
+      "title": "AppConfigPublic",
+      "description": "Non-sensitive school branding, exam feature flags, and hashed exam token.",
+      "type": "object",
+      "properties": {
+        "nama_instansi": { "type": "string", "maxLength": 200 },
+        "kementerian_header": { "type": "string", "maxLength": 250 },
+        "nama_sekolah": { "type": "string", "maxLength": 200 },
+        "logo_sekolah": { "type": "string", "maxLength": 120000 },
+        "logo_kementerian": { "type": "string", "maxLength": 120000 },
+        "nama_ujian": { "type": "string", "maxLength": 160 },
+        "durasi": { "type": "string", "maxLength": 16 },
+        "status_ujian": { "type": "string", "enum": ["Aktif", "Nonaktif", "Selesai"] },
+        "acak_soal": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "ujian_ketat": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "kiosk_mode": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "exambro_only": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "device_lock": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "kalkulator": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "coretan": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "adaptif_cat": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "ai_face_liveness": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "ai_gaze": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "audio_monitoring": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "audio_limit": { "type": "string", "maxLength": 32 },
+        "tokenHash": { "type": "string", "maxLength": 128 },
+        "tokenRequired": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nama_sekolah", "nama_ujian", "durasi", "status_ujian", "tokenHash", "tokenRequired", "updatedAt"]
+    },
+    "AppSecrets": {
+      "title": "AppSecrets",
+      "description": "Admin and proctor sensitive exam settings including plaintext token and principal details.",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "maxLength": 32 },
+        "notif_email": { "type": "string", "enum": ["Ya", "Tidak"] },
+        "email_wali": { "type": "string", "maxLength": 200 },
+        "kepsek_nama": { "type": "string", "maxLength": 150 },
+        "kepsek_nip": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["token", "updatedAt"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Master student record without plaintext password.",
+      "type": "object",
+      "properties": {
+        "nis": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nama": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "kelas": { "type": "string", "maxLength": 64 },
+        "sesi": { "type": "string", "maxLength": 32 },
+        "ruang": { "type": "string", "maxLength": 64 },
+        "passHash": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[a-f0-9]{64}$" },
+        "status": { "type": "string", "enum": ["Offline", "Sedang Ujian", "Selesai"] },
+        "activeDeviceId": { "type": "string", "maxLength": 128 },
+        "boundOwnerUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nis", "nama", "kelas", "sesi", "passHash", "status", "createdAt", "updatedAt"]
+    },
+    "StudentCredential": {
+      "title": "StudentCredential",
+      "description": "Admin-only credential storage for printing participant cards.",
+      "type": "object",
+      "properties": {
+        "nis": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "password": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nis", "password", "updatedAt"]
+    },
+    "StudentSession": {
+      "title": "StudentSession",
+      "description": "Verified Firebase user session linked to a validated student NIS.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nis": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "passHash": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[a-f0-9]{64}$" },
+        "deviceId": { "type": "string", "maxLength": 128 },
+        "deviceDesc": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "nis", "passHash", "deviceId", "createdAt", "updatedAt"]
+    },
+    "Proctor": {
+      "title": "Proctor",
+      "description": "Master proctor record with SHA-256 credential hash.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nama": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "passHash": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[a-f0-9]{64}$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "nama", "passHash", "createdAt", "updatedAt"]
+    },
+    "ProctorCredential": {
+      "title": "ProctorCredential",
+      "description": "Admin-only proctor password reference.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "password": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "password", "updatedAt"]
+    },
+    "ProctorSession": {
+      "title": "ProctorSession",
+      "description": "Verified Firebase user session linked to a validated proctor username.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "proctorUsername": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "passHash": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[a-f0-9]{64}$" },
+        "nama": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "proctorUsername", "passHash", "nama", "createdAt", "updatedAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Exam question item in the question bank.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "mapel": { "type": "string", "maxLength": 120 },
+        "kelas": { "type": "string", "maxLength": 80 },
+        "no": { "type": "string", "maxLength": 16 },
+        "soal": { "type": "string", "maxLength": 20000 },
+        "a": { "type": "string", "maxLength": 5000 },
+        "b": { "type": "string", "maxLength": 5000 },
+        "c": { "type": "string", "maxLength": 5000 },
+        "d": { "type": "string", "maxLength": 5000 },
+        "e": { "type": "string", "maxLength": 5000 },
+        "kunci": { "type": "string", "maxLength": 500 },
+        "tipe_soal": { "type": "string", "maxLength": 40 },
+        "kesulitan": { "type": "string", "maxLength": 32 },
+        "data_akm": { "type": "string", "maxLength": 20000 },
+        "sortOrder": { "type": "number" },
+        "isPublished": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "mapel", "kelas", "no", "soal", "tipe_soal", "isPublished", "sortOrder", "createdAt", "updatedAt"]
+    },
+    "Schedule": {
+      "title": "Schedule",
+      "description": "Exam schedule session entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tanggal": { "type": "string", "maxLength": 40 },
+        "mapel": { "type": "string", "maxLength": 120 },
+        "kelas": { "type": "string", "maxLength": 80 },
+        "ruang": { "type": "string", "maxLength": 64 },
+        "sesi": { "type": "string", "maxLength": 32 },
+        "jam_mulai": { "type": "string", "maxLength": 24 },
+        "jam_selesai": { "type": "string", "maxLength": 24 },
+        "token": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "maxLength": 32 },
+        "proktor": { "type": "string", "maxLength": 120 },
+        "pengawas": { "type": "string", "maxLength": 120 },
+        "banyak_soal": { "type": "string", "maxLength": 16 },
+        "jenis_ujian": { "type": "string", "maxLength": 64 },
+        "isPublished": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "mapel", "kelas", "sesi", "status", "isPublished", "createdAt", "updatedAt"]
+    },
+    "GoogleFormLink": {
+      "title": "GoogleFormLink",
+      "description": "Configured Google Form link with parsed native Google Form items.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "mapel": { "type": "string", "maxLength": 120 },
+        "kelas": { "type": "string", "maxLength": 80 },
+        "formUrl": { "type": "string", "maxLength": 1000 },
+        "formId": { "type": "string", "maxLength": 256 },
+        "formResponseUrl": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["Aktif", "Nonaktif"] },
+        "judulForm": { "type": "string", "maxLength": 300 },
+        "formDescription": { "type": "string", "maxLength": 5000 },
+        "submitMode": { "type": "string", "maxLength": 32 },
+        "sections": { "type": "array" },
+        "items": { "type": "array" },
+        "isPublished": { "type": "boolean" },
+        "timestampText": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "mapel", "kelas", "formUrl", "status", "isPublished", "sections", "items", "createdAt", "updatedAt"]
+    },
+    "ExamSession": {
+      "title": "ExamSession",
+      "description": "Persistent cross-device student exam progress, answers map, timer, and submitted results.",
+      "type": "object",
+      "properties": {
+        "nis": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nama": { "type": "string", "maxLength": 160 },
+        "kelas": { "type": "string", "maxLength": 64 },
+        "mapel": { "type": "string", "maxLength": 120 },
+        "ruang": { "type": "string", "maxLength": 64 },
+        "ownerUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deviceId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["Sedang Ujian", "Selesai", "Selesai (OMR Kertas)", "Offline"] },
+        "forceStopped": { "type": "boolean" },
+        "answers": { "type": "object" },
+        "timeLeft": { "type": "number" },
+        "totalSoal": { "type": "number" },
+        "answeredCount": { "type": "number" },
+        "score": { "type": "number" },
+        "tokenUsed": { "type": "string", "maxLength": 64 },
+        "hashSig": { "type": "string", "maxLength": 128 },
+        "detailAnalisa": { "type": "array" },
+        "submittedAtText": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nis", "nama", "kelas", "ownerUid", "status", "answers", "timeLeft", "totalSoal", "answeredCount", "score", "createdAt", "updatedAt"]
+    },
+    "ViolationLog": {
+      "title": "ViolationLog",
+      "description": "Audit log of student login, lockdown violations, and submissions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nis": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nama": { "type": "string", "maxLength": 160 },
+        "aktivitas": { "type": "string", "maxLength": 120 },
+        "detail": { "type": "string", "maxLength": 500 },
+        "ownerUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "timestampText": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "nis", "nama", "aktivitas", "detail", "ownerUid", "timestampText", "createdAt"]
+    },
+    "StudentPhoto": {
+      "title": "StudentPhoto",
+      "description": "Webcam or admin ID verification photo (compressed JPEG <= 200KB).",
+      "type": "object",
+      "properties": {
+        "nis": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nama": { "type": "string", "maxLength": 160 },
+        "fotoBase64": { "type": "string", "maxLength": 350000 },
+        "tokenSesi": { "type": "string", "maxLength": 64 },
+        "ownerUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "timestampText": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nis", "nama", "fotoBase64", "ownerUid", "timestampText", "updatedAt"]
+    },
+    "ExamArchive": {
+      "title": "ExamArchive",
+      "description": "Archived semester results and analysis snapshot.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "namaArsip": { "type": "string", "maxLength": 120 },
+        "totalHasil": { "type": "number" },
+        "rataRata": { "type": "number" },
+        "hasilList": { "type": "array" },
+        "analisaList": { "type": "array" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "namaArsip", "totalHasil", "rataRata", "hasilList", "analisaList", "createdBy", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Explicit admin UID allowlist documents."
+    },
+    "/app_config/{docId}": {
+      "schema": { "$ref": "#/entities/AppConfigPublic" },
+      "description": "Public school & exam config (docId = 'public')."
+    },
+    "/app_secrets/{docId}": {
+      "schema": { "$ref": "#/entities/AppSecrets" },
+      "description": "Admin/Proctor private settings (docId = 'private')."
+    },
+    "/students/{nis}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Master student records keyed by NIS."
+    },
+    "/student_credentials/{nis}": {
+      "schema": { "$ref": "#/entities/StudentCredential" },
+      "description": "Admin-only student password lookup for card printing."
+    },
+    "/student_sessions/{uid}": {
+      "schema": { "$ref": "#/entities/StudentSession" },
+      "description": "Authenticated student session binding Google UID to NIS."
+    },
+    "/proctors/{proctorId}": {
+      "schema": { "$ref": "#/entities/Proctor" },
+      "description": "Master proctor records keyed by username."
+    },
+    "/proctor_credentials/{proctorId}": {
+      "schema": { "$ref": "#/entities/ProctorCredential" },
+      "description": "Admin-only proctor password reference."
+    },
+    "/proctor_sessions/{uid}": {
+      "schema": { "$ref": "#/entities/ProctorSession" },
+      "description": "Authenticated proctor session binding Google UID to proctor username."
+    },
+    "/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/Question" },
+      "description": "Exam question bank documents."
+    },
+    "/schedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/Schedule" },
+      "description": "Exam schedule records."
+    },
+    "/gform_links/{linkId}": {
+      "schema": { "$ref": "#/entities/GoogleFormLink" },
+      "description": "Google Form link definitions and cached parsed questions."
+    },
+    "/exam_sessions/{nis}": {
+      "schema": { "$ref": "#/entities/ExamSession" },
+      "description": "Persistent cross-device exam state, answers, and submitted score keyed by NIS."
+    },
+    "/violations/{violationId}": {
+      "schema": { "$ref": "#/entities/ViolationLog" },
+      "description": "Exam security & activity logs."
+    },
+    "/photos/{nis}": {
+      "schema": { "$ref": "#/entities/StudentPhoto" },
+      "description": "Latest student verification photo keyed by NIS."
+    },
+    "/archives/{archiveId}": {
+      "schema": { "$ref": "#/entities/ExamArchive" },
+      "description": "Admin-only archived exam score snapshots."
+    }
+  }
+}
